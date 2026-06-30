@@ -392,6 +392,9 @@ function debugTestProductFetch(url) {
 
   AppLogger.info('debugTestProductFetch mshop_bar以降3000文字', tail.slice(0, 3000));
   AppLogger.info('debugTestProductFetch mshop_bar以降3000-6000文字', tail.slice(3000, 6000));
+  AppLogger.info('debugTestProductFetch mshop_bar以降6000-9000文字', tail.slice(6000, 9000));
+  AppLogger.info('debugTestProductFetch mshop_bar以降9000-12000文字', tail.slice(9000, 12000));
+  AppLogger.info('debugTestProductFetch mshop_bar以降12000-15000文字', tail.slice(12000, 15000));
 
   // 商品本体コンテンツの開始位置（goods_wrap）からmshop_barまでの範囲。
   // ここに商品タイトル直下の価格・レビュー・評価ウィジェットがあると推測される。
