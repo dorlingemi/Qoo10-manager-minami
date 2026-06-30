@@ -393,6 +393,16 @@ function debugTestProductFetch(url) {
   AppLogger.info('debugTestProductFetch mshop_bar以降3000文字', tail.slice(0, 3000));
   AppLogger.info('debugTestProductFetch mshop_bar以降3000-6000文字', tail.slice(3000, 6000));
 
+  // 商品本体コンテンツの開始位置（goods_wrap）からmshop_barまでの範囲。
+  // ここに商品タイトル直下の価格・レビュー・評価ウィジェットがあると推測される。
+  var goodsWrapIdx = html.indexOf('goods_wrap');
+  if (goodsWrapIdx >= 0) {
+    var goodsHtml = html.slice(goodsWrapIdx, afterShopBar >= 0 ? afterShopBar : goodsWrapIdx + 8000);
+    AppLogger.info('debugTestProductFetch goods_wrap以降1/3', goodsHtml.slice(0, 3000));
+    AppLogger.info('debugTestProductFetch goods_wrap以降2/3', goodsHtml.slice(3000, 6000));
+    AppLogger.info('debugTestProductFetch goods_wrap以降3/3', goodsHtml.slice(6000, 9000));
+  }
+
   // mshop_bar直前（商品タイトル/価格/レビューのヘッダー部分があると推測される領域）
   if (afterShopBar >= 0) {
     var headStart = Math.max(0, afterShopBar - 8000);
