@@ -363,22 +363,57 @@ function debugTestProductFetch(url) {
       isFreeShip: product.isFreeShip, category: product.category,
     }));
 
-  // 主要項目周辺の生HTML断片（パターン調整の手がかり用）
-  var priceIdx  = html.search(/円/);
-  AppLogger.info('debugTestProductFetch 価格周辺HTML', html.slice(Math.max(0, priceIdx - 200), priceIdx + 200));
-
-  var reviewIdx = html.search(/レビュー|review/i);
-  if (reviewIdx >= 0) {
-    AppLogger.info('debugTestProductFetch レビュー周辺HTML', html.slice(Math.max(0, reviewIdx - 200), reviewIdx + 200));
+  // JSON-LD構造化データ（最も信頼できるデータ源。存在すれば丸ごと出力）
+  var ldJsonBlocks = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+  if (ldJsonBlocks) {
+    ldJsonBlocks.forEach(function (block, i) {
+      AppLogger.info('debugTestProductFetch JSON-LD[' + i + ']', block.slice(0, 1500));
+    });
+  } else {
+    AppLogger.info('debugTestProductFetch JSON-LD', '見つかりませんでした');
   }
 
-  var salesIdx = html.search(/販売累計|総販売|累計販売/);
+  // 主要項目周辺の生HTML断片（パターン調整の手がかり用）
+  // search()の最初のヒットだと無関係な箇所（検索履歴UI等）に当たるため、
+  // より具体的なマーカーを使い、見つからない場合は全件のインデックスを試す。
+  var priceMatches = _findAllIndexes(html, /[\d,]{3,}\s*円/g);
+  priceMatches.slice(0, 3).forEach(function (idx, i) {
+    AppLogger.info('debugTestProductFetch 価格候補HTML[' + i + ']', html.slice(Math.max(0, idx - 150), idx + 150));
+  });
+
+  var reviewIdx = html.search(/review_total_count|review_rating_star|レビュー\s*\(|reviewCount/i);
+  if (reviewIdx >= 0) {
+    AppLogger.info('debugTestProductFetch レビュー周辺HTML', html.slice(Math.max(0, reviewIdx - 200), reviewIdx + 300));
+  }
+
+  var salesIdx = html.search(/販売累計|総販売数|累計販売|sales[_-]?count/i);
   if (salesIdx >= 0) {
     AppLogger.info('debugTestProductFetch 販売累計周辺HTML', html.slice(Math.max(0, salesIdx - 200), salesIdx + 200));
   }
 
-  SpreadsheetApp.getUi().alert('実行完了。Logシートで "debugTestProductFetch" の行を確認してください。\n' +
-    'title/salePriceが取得できていなければParser.gsのparseProduct内パターンを生HTML断片に合わせて調整します。');
+  var shopIdx = html.search(/lnk_sh|seller[_-]?name|shop[_-]?name|class="[^"]*shop/i);
+  if (shopIdx >= 0) {
+    AppLogger.info('debugTestProductFetch 店舗名周辺HTML', html.slice(Math.max(0, shopIdx - 150), shopIdx + 250));
+  }
+
+  var imgIdx = html.search(/class="[^"]*(?:thumb|gallery|img_list|prd_img)/i);
+  if (imgIdx >= 0) {
+    AppLogger.info('debugTestProductFetch 画像ギャラリー周辺HTML', html.slice(Math.max(0, imgIdx - 100), imgIdx + 600));
+  }
+
+  SpreadsheetApp.getUi().alert('実行完了。Logシートで "debugTestProductFetch" 関連の行を確認してください。\n' +
+    '特に JSON-LD が見つかっていればそれを最優先でParser.gsに反映します。');
+}
+
+/** 正規表現に一致する全位置のindexを配列で返す（デバッグ用） */
+function _findAllIndexes(text, regex) {
+  var indexes = [];
+  var match;
+  while ((match = regex.exec(text)) !== null) {
+    indexes.push(match.index);
+    if (match.index === regex.lastIndex) regex.lastIndex++;  // ゼロ幅マッチ対策
+  }
+  return indexes;
 }
 
 /**
