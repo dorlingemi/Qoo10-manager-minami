@@ -100,7 +100,7 @@ var Parser = (function () {
     p.mainImage  = images[0] || '';
     p.hasVideo   = /(?:youtube|vimeo|mp4|\.m3u8|video)/i.test(html);
 
-    // 価格（JSON-LDのoffers.priceSpecificationにListPrice/SalePriceが分かれて入る）
+    // 価格（実データ検証済み: data-price属性 / hidden input sell_price が最も信頼できる）
     var listPrice = 0, salePrice = 0;
     if (ld && ld.offers) {
       salePrice = _num(ld.offers.price);
@@ -111,8 +111,13 @@ var Parser = (function () {
         });
       }
     }
-    p.salePrice     = salePrice || _num(_extract(html, 'class="prc">\\s*<strong>([\\d,]+)円'));
-    p.originalPrice = listPrice > p.salePrice ? listPrice : 0;
+    p.salePrice     = salePrice ||
+                      _num(_extract(html, 'data-price="(\\d+)"')) ||
+                      _num(_extract(html, 'id="sell_price"\\s+value="(\\d+)"'));
+    p.originalPrice = listPrice ||
+                      _num(_extract(html, 'id="retail_price"\\s+value="(\\d+)"')) ||
+                      _num(_extract(html, 'id="market_price"\\s+value="(\\d+)"'));
+    p.originalPrice = p.originalPrice > p.salePrice ? p.originalPrice : 0;
     p.discount      = p.originalPrice > 0
                      ? Math.round((1 - p.salePrice / p.originalPrice) * 100)
                      : 0;
@@ -122,40 +127,55 @@ var Parser = (function () {
     p.itemCoupon = _num(_extract(tail, 'item[_-]?coupon[^>]*>[^<]*([\\d,]+)'));
     p.finalPrice = p.salePrice - p.shopCoupon - p.itemCoupon;
 
-    // 配送（未検証の暫定パターン）
-    p.shippingFee     = _extract(tail, '(?:配送料|送料)[^<]*([\\d,]+円|無料|FREE)') ||
-                        _extract(tail, 'shipping[_-]?(?:fee|cost)[^>]*>([^<]+)<');
-    p.isFreeShip       = /無料|FREE|0円/i.test(p.shippingFee);
-    p.shippingDays     = _extract(tail, '(?:発送|配送)[^<]*?(\\d+)[^<]*?(?:日|days?)') || '';
-    p.shippingMethod   = _extract(tail, '(?:配送方法|shipping method)[^<]*<[^>]+>([^<]+)<') || '';
+    // 配送（実データ検証済み: 「発送国」「送料」「発送日」のdl/ddペア、
+    // および delivery_fee hidden inputで判定）
+    p.shippingCountry = _extract(html, '<dt>発送国</dt>\\s*<dd>([^<]+)</dd>');
+    p.shippingFee      = _extract(html, '<em\\s+id="delivery_option_fee_\\d+">\\s*([^<]+)</em>') ||
+                         _extract(html, 'id="delivery_fee"\\s+value="(\\d+)"');
+    p.isFreeShip        = /無料|FREE/i.test(p.shippingFee) ||
+                          _extract(html, 'id="delivery_fee"\\s+value="(\\d+)"') === '0';
+    p.shippingDays      = _extract(html, '<dt>発送日</dt>\\s*<dd>([^<]+)</dd>') || '';
+    p.shippingMethod    = _extract(html, 'class="sh_option2"[^>]*>\\s*([^<]+?)\\s*-\\s*<em') || '';
 
-    // 店舗名（mshop_bar内のshopリンクのslugから推定。表示名が取れた場合はそちらを優先）
+    // 店舗名（実データ検証済み: mshop_bar内 class="name" のリンクテキスト）
     var shopSlug = _extract(tail, '/shop/([a-zA-Z0-9_-]+)');
-    p.shopName   = _extract(tail, 'class="[^"]*shop[_-]?nm[^"]*"[^>]*>([^<]+)<') ||
-                  _extract(tail, '/shop/[a-zA-Z0-9_-]+"[^>]*>([^<]+)<') ||
+    p.shopName   = _extract(tail, 'class="name">([^<]+)<') ||
                   (shopSlug ? shopSlug.replace(/[_-]/g, ' ') : '');  // 推測フォールバック
 
-    // 販売累計・レビュー（JSON-LDに含まれないため要実データ検証。現状は未確定の暫定パターン）
-    p.totalSales  = _num(_extract(tail, '販売累計[^<]*<[^>]+>([\\d,]+)') ||
-                         _extract(tail, 'sales[_-]?count[^>]*>([\\d,]+)'));
-    p.reviewCount = _num(_extract(tail, '(?:レビュー|review)[^<]*?([\\d,]+)件') ||
-                         _extract(tail, 'review[_-]?count[^>]*>([\\d,]+)'));
-    p.reviewScore = _num(_extract(tail, 'class="[^"]*rating[^"]*"[^>]*>([\\d.]+)<'));
+    // 店舗商品数・フォロワー数（実データ検証済み: mshop_bar内）
+    p.shopItemCount = _num(_extract(tail, 'class="num">([\\d,]+)<'));
+    p.shopFollowers = _num(_extract(tail, 'class="flw_num">[^<]*<em>([\\d,]+)</em>'));
+
+    // 店舗評価（実データ検証済み: class="mshop_rt" 内の幅(%)表記。0-100%スケール）
+    p.storeScore = _num(_extract(tail, 'class="mshop_rt"><span class="on" style="width:([\\d.]+)%'));
+    p.storeGrade = '';
+
+    // 販売累計・レビュー
+    // ⚠️ 検証した商品（レビュー0件）にはレビューウィジェット自体が描画されておらず、
+    // HTML内に該当箇所が存在しなかった。Qoo10はレビュー有りの商品のみウィジェットを
+    // 描画する可能性が高い。レビューが付いている商品で別途検証が必要。
+    // 現状は安全側に倒し、明確なウィジェットマーカーが見つかった場合のみ採用する
+    // （誤検出を避けるため「レビュー」「件」等の緩いキーワード一致は使用しない）。
+    p.totalSales  = 0;  // Qoo10商品ページに「販売累計」表示自体が見当たらないため要再調査
+    p.reviewCount = _num(_extract(tail, 'review_total_count">\\(([\\d,]+)\\)'));
+    p.reviewScore = (function () {
+      var pct = _num(_extract(tail, 'review_rating_star"\\s+style="width:\\s*([\\d.]+)%'));
+      return pct > 0 ? Math.round((pct / 100) * 5 * 10) / 10 : 0;
+    })();
     p.wishlistCount = _num(_extract(tail, 'wishlist[^>]*>([\\d,]+)') ||
                            _extract(tail, '気になる[^<]*([\\d,]+)'));
 
-    // カテゴリ（未検証の暫定パターン）
-    p.category = _extractAll(html, 'class="[^"]*breadcrumb[^"]*"[^>]*>([^<]+)<').join(' > ');
-
-    // 店舗評価（未検証の暫定パターン）
-    p.storeScore = _num(_extract(tail, 'seller[_-]?(?:score|rating)[^>]*>([\\d.]+)'));
-    p.storeGrade = _extract(tail, 'seller[_-]?grade[^>]*>([^<]+)<') || '';
+    // カテゴリ（実データ検証済み: 商品フォーム内のhidden inputに大中小分類が直接入っている）
+    var catLarge = _extract(html, 'id="gdlc_nm"\\s+value="([^"]*)"');
+    var catMid   = _extract(html, 'id="gdmc_nm"\\s+value="([^"]*)"');
+    var catSmall = _extract(html, 'id="gdsc_nm"\\s+value="([^"]*)"');
+    p.category = [catLarge, catMid, catSmall].filter(Boolean).join(' > ');
 
     // 上市日（JSON-LDにdatePublishedがあれば使用。今回未確認のため空の可能性あり）
     p.listedDate = (ld && ld.datePublished) || '';
 
-    // SKU数（未検証の暫定パターン）
-    var skus = _extractAll(tail, 'class="[^"]*(?:option|sku)[^"]*"[^>]*>([^<]+)<');
+    // SKU数（実データ検証済み: 商品タイプ選択肢のli要素数）
+    var skus = _extractAll(html, 'id="li_inventory_0_[^"]*"', '');
     p.skuCount = skus.length;
 
     p.titleLength = p.title.length;

@@ -161,9 +161,11 @@ var Calculator = (function () {
 
   /**
    * 店舗スコア（0-100）
+   * Parser.parseProductのstoreScoreはQoo10の「MINISHOP RATE」表記（実データ検証済み、
+   * 0-100%スケール）をそのまま使用するため、追加の変換は不要。
    */
   function calcStoreScore(storeScore) {
-    return Math.round(Math.min((_num(storeScore) / 5) * 100, 100));
+    return Math.round(Math.min(_num(storeScore), 100));
   }
 
   /**
