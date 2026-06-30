@@ -384,47 +384,16 @@ function debugTestProductFetch(url) {
     AppLogger.info('debugTestProductFetch 価格候補HTML[' + i + ']', html.slice(Math.max(0, idx - 150), idx + 150));
   });
 
-  // 「ac_total_」で始まるオートコンプリート用の隠しウィジェットは商品本体の情報ではないため、
-  // mshop_bar（実店舗バー）以降の範囲に限定して検索することで誤検出を避ける。
-  var afterShopBar = html.indexOf('mshop_bar');
-  var searchBase    = afterShopBar >= 0 ? afterShopBar : 0;
-  var tail          = html.slice(searchBase);
+  // goodsDetailWrap（実際の商品詳細・カテゴリパネルの開始点。mshop_barの
+  // 約15000文字後に存在することを確認済み）以降を大きめのチャンクで一括ダンプする。
+  var detailIdx = html.indexOf('goodsDetailWrap');
+  var detailTail = detailIdx >= 0 ? html.slice(detailIdx) : html.slice(html.indexOf('mshop_bar'));
 
-  AppLogger.info('debugTestProductFetch mshop_bar以降3000文字', tail.slice(0, 3000));
-  AppLogger.info('debugTestProductFetch mshop_bar以降3000-6000文字', tail.slice(3000, 6000));
-  AppLogger.info('debugTestProductFetch mshop_bar以降6000-9000文字', tail.slice(6000, 9000));
-  AppLogger.info('debugTestProductFetch mshop_bar以降9000-12000文字', tail.slice(9000, 12000));
-  AppLogger.info('debugTestProductFetch mshop_bar以降12000-15000文字', tail.slice(12000, 15000));
-  AppLogger.info('debugTestProductFetch mshop_bar以降15000-18000文字', tail.slice(15000, 18000));
-  AppLogger.info('debugTestProductFetch mshop_bar以降18000-21000文字', tail.slice(18000, 21000));
-  AppLogger.info('debugTestProductFetch mshop_bar以降21000-24000文字', tail.slice(21000, 24000));
-
-  // 商品本体コンテンツの開始位置（goods_wrap）からmshop_barまでの範囲。
-  // ここに商品タイトル直下の価格・レビュー・評価ウィジェットがあると推測される。
-  var goodsWrapIdx = html.indexOf('goods_wrap');
-  if (goodsWrapIdx >= 0) {
-    var goodsHtml = html.slice(goodsWrapIdx, afterShopBar >= 0 ? afterShopBar : goodsWrapIdx + 8000);
-    AppLogger.info('debugTestProductFetch goods_wrap以降1/3', goodsHtml.slice(0, 3000));
-    AppLogger.info('debugTestProductFetch goods_wrap以降2/3', goodsHtml.slice(3000, 6000));
-    AppLogger.info('debugTestProductFetch goods_wrap以降3/3', goodsHtml.slice(6000, 9000));
-  }
-
-  // mshop_bar直前（商品タイトル/価格/レビューのヘッダー部分があると推測される領域）
-  if (afterShopBar >= 0) {
-    var headStart = Math.max(0, afterShopBar - 8000);
-    var head      = html.slice(headStart, afterShopBar);
-    AppLogger.info('debugTestProductFetch mshop_bar直前1/2(末尾4000文字)', head.slice(-4000, -2000));
-    AppLogger.info('debugTestProductFetch mshop_bar直前2/2(末尾2000文字)', head.slice(-2000));
-  }
-
-  var reviewIdx = tail.search(/review_total_count|reviewCount|件のレビュー|レビュー\s*\d/i);
-  if (reviewIdx >= 0) {
-    AppLogger.info('debugTestProductFetch レビュー周辺HTML(mshop_bar以降)', tail.slice(Math.max(0, reviewIdx - 200), reviewIdx + 300));
-  }
-
-  var salesIdx = tail.search(/販売累計|総販売数|累計販売|sales[_-]?count/i);
-  if (salesIdx >= 0) {
-    AppLogger.info('debugTestProductFetch 販売累計周辺HTML(mshop_bar以降)', tail.slice(Math.max(0, salesIdx - 200), salesIdx + 200));
+  var CHUNK = 8000;
+  for (var c = 0; c < 8; c++) {
+    var chunkText = detailTail.slice(c * CHUNK, (c + 1) * CHUNK);
+    if (!chunkText) break;
+    AppLogger.info('debugTestProductFetch goodsDetailWrap以降[' + c + '] (' + (c * CHUNK) + '-' + ((c + 1) * CHUNK) + ')', chunkText);
   }
 
   SpreadsheetApp.getUi().alert('実行完了。Logシートで "debugTestProductFetch" 関連の行を確認してください。\n' +
