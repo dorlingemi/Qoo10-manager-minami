@@ -304,6 +304,10 @@ function initInputSheet() {
 /**
  * デバッグ用：検索URLの生HTMLを取得してLogシートに最初の500文字を出力する
  * Qoo10のbot対策（Cloudflare等）でブロックされていないか確認する目的。
+ *
+ * ブロック判定は「cloudflare/captcha等の単語が含まれるか」ではなく
+ * （Qoo10ページ自体にCookie同意文言等で誤検出するため）、
+ * 実際に検証済みの商品行マーカー（ga-product="..."）が存在するかで行う。
  */
 function debugTestSearchFetch() {
   var keyword = 'つけまつげ';
@@ -315,14 +319,13 @@ function debugTestSearchFetch() {
   var snippet = html.slice(0, 500).replace(/\n/g, ' ');
   AppLogger.info('debugTestSearchFetch 結果先頭500文字', snippet);
 
-  // ブロックの兆候を簡易チェック
-  var blocked = /cloudflare|523|access denied|captcha|blocked/i.test(html);
-  AppLogger.info('debugTestSearchFetch ブロック疑い: ' + blocked, html.length + '文字取得');
+  var items = Parser.parseSearchResults(html);
+  AppLogger.info('debugTestSearchFetch 商品抽出件数: ' + items.length, html.length + '文字取得');
 
   SpreadsheetApp.getUi().alert(
-    blocked
-      ? '⚠️ ブロックの可能性あり。Logシートで詳細を確認してください。'
-      : '取得成功と見られます。Logシートで内容を確認してください。'
+    items.length > 0
+      ? '取得成功。商品 ' + items.length + ' 件を抽出しました。'
+      : '⚠️ 商品が0件でした。ブロックされたかHTML構造が変わった可能性があります。Logシートを確認してください。'
   );
 }
 
