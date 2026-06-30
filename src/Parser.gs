@@ -38,10 +38,37 @@ var Parser = (function () {
     return isNaN(n) ? 0 : n;
   }
 
+  /**
+   * HTML内のJSON-LD（schema.org Product）ブロックをパースして返す。
+   * 実際のQoo10商品ページで確認済み（2026-06-30検証）の構造:
+   *   {"@type":"Product","name":..,"image":[...],"brand":{"name":..},
+   *    "sku":..,"offers":{"price":..,"priceSpecification":[{"priceType":"ListPrice"|"SalePrice","price":..}]}}
+   * aggregateRating（レビュー数・評価）は含まれないため別途HTML解析が必要。
+   * @returns {Object|null}
+   */
+  function _parseJsonLd(html) {
+    var block = _extract(html, '<script[^>]+type="application/ld\\+json"[^>]*>([\\s\\S]*?)</script>');
+    if (!block) return null;
+    try {
+      return JSON.parse(block);
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ── 商品ページ解析 ────────────────────────────────────
 
   /**
    * 商品ページHTMLから商品情報オブジェクトを生成する
+   *
+   * JSON-LD構造化データ（schema.org Product）を最優先のデータ源とする
+   * （title/brand/image/price/skuは実データで検証済み・高信頼）。
+   * JSON-LDに含まれない項目（店舗名/レビュー/販売累計/カテゴリ/店舗評価）は
+   * HTML正規表現フォールバックだが、こちらは実HTML未検証の暫定パターン。
+   * オートコンプリート用の隠しウィジェット（id="ac_total_*"）が同名クラスを
+   * 使い回しているため、誤検出を避けるため "mshop_bar"（実店舗バー）以降の
+   * 範囲に限定して検索する。
+   *
    * @param {string} html
    * @param {string} url
    * @returns {Object} product
@@ -49,91 +76,94 @@ var Parser = (function () {
   function parseProduct(html, url) {
     if (!html) return null;
 
-    var p = {};
+    var p  = {};
+    var ld = _parseJsonLd(html);
+
     p.url       = url;
     p.fetchedAt = new Date().toISOString();
+    p.itemNo    = (ld && ld.sku) || _extract(url, '/g/(\\d+)') || _extract(url, '/(\\d+)(?:[?#]|$)');
 
-    // 商品ID
-    p.itemNo = _extract(html, 'itemNo["\']?\\s*[=:]\\s*["\']?(\\d+)') ||
-               _extract(url, '/g/(\\d+)');
+    // mshop_bar以降に限定した検索範囲（自動補完ウィジェットの誤検出回避）
+    var shopBarIdx = html.indexOf('mshop_bar');
+    var tail       = shopBarIdx >= 0 ? html.slice(shopBarIdx) : html;
 
-    // タイトル
-    p.title = _extract(html, '<title>([^<]+)</title>') ||
-              _extract(html, 'og:title"\\s+content="([^"]+)"');
-    p.title = p.title.replace(/\s*[\|｜]\s*Qoo10.*$/, '').trim();
-
-    // ブランド
-    p.brand = _extract(html, '"brand"\\s*:\\s*\\{[^}]*"name"\\s*:\\s*"([^"]+)"') ||
+    // タイトル・ブランド（JSON-LD優先）
+    p.title = (ld && ld.name) ||
+              _extract(html, '<title>([^<]+)</title>').replace(/\s*[\|｜]\s*Qoo10.*$/, '').trim();
+    p.brand = (ld && ld.brand && ld.brand.name) ||
               _extract(html, 'class="[^"]*brand[^"]*"[^>]*>([^<]+)<');
 
-    // 店舗名
-    p.shopName = _extract(html, '"seller"\\s*:\\s*\\{[^}]*"name"\\s*:\\s*"([^"]+)"') ||
-                 _extract(html, 'class="[^"]*shop[_-]?name[^"]*"[^>]*>([^<]+)<') ||
-                 _extract(html, 'seller_name["\']?\\s*[=:]\\s*["\']([^"\']+)');
+    // 画像（JSON-LDのimage配列を優先。実データで複数枚を確認済み）
+    var images = (ld && Array.isArray(ld.image)) ? ld.image
+               : _extractAll(html, 'itemprop="image"[^>]+content="([^"]+)"');
+    p.imageCount = images.length;
+    p.mainImage  = images[0] || '';
+    p.hasVideo   = /(?:youtube|vimeo|mp4|\.m3u8|video)/i.test(html);
 
-    // 価格
-    p.salePrice    = _num(_extract(html, '"price"\\s*:\\s*"?([\\d,]+)') ||
-                          _extract(html, 'class="[^"]*sale[_-]?price[^"]*"[^>]*>[\\s]*([\\d,]+)'));
-    p.originalPrice= _num(_extract(html, '"highPrice"\\s*:\\s*"?([\\d,]+)') ||
-                          _extract(html, 'class="[^"]*ori[_-]?price[^"]*"[^>]*>[^<]*([\\d,]+)'));
-    p.discount     = p.originalPrice > 0
+    // 価格（JSON-LDのoffers.priceSpecificationにListPrice/SalePriceが分かれて入る）
+    var listPrice = 0, salePrice = 0;
+    if (ld && ld.offers) {
+      salePrice = _num(ld.offers.price);
+      if (Array.isArray(ld.offers.priceSpecification)) {
+        ld.offers.priceSpecification.forEach(function (ps) {
+          if (ps.priceType === 'ListPrice') listPrice = _num(ps.price);
+          if (ps.priceType === 'SalePrice') salePrice = _num(ps.price) || salePrice;
+        });
+      }
+    }
+    p.salePrice     = salePrice || _num(_extract(html, 'class="prc">\\s*<strong>([\\d,]+)円'));
+    p.originalPrice = listPrice > p.salePrice ? listPrice : 0;
+    p.discount      = p.originalPrice > 0
                      ? Math.round((1 - p.salePrice / p.originalPrice) * 100)
                      : 0;
 
-    // クーポン
-    p.shopCoupon   = _num(_extract(html, 'shop[_-]?coupon[^>]*>[^<]*([\\d,]+)'));
-    p.itemCoupon   = _num(_extract(html, 'item[_-]?coupon[^>]*>[^<]*([\\d,]+)'));
-    p.finalPrice   = p.salePrice - p.shopCoupon - p.itemCoupon;
+    // クーポン（未検証の暫定パターン）
+    p.shopCoupon = _num(_extract(tail, 'shop[_-]?coupon[^>]*>[^<]*([\\d,]+)'));
+    p.itemCoupon = _num(_extract(tail, 'item[_-]?coupon[^>]*>[^<]*([\\d,]+)'));
+    p.finalPrice = p.salePrice - p.shopCoupon - p.itemCoupon;
 
-    // 配送
-    p.shippingFee  = _extract(html, '(?:配送料|送料)[^<]*([\\d,]+円|無料|FREE)') ||
-                     _extract(html, 'shipping[_-]?(?:fee|cost)[^>]*>([^<]+)<');
-    p.isFreeShip   = /無料|FREE|0円/i.test(p.shippingFee);
-    p.shippingDays = _extract(html, '(?:発送|配送)[^<]*?(\\d+)[^<]*?(?:日|days?)') || '';
-    p.shippingMethod = _extract(html, '(?:配送方法|shipping method)[^<]*<[^>]+>([^<]+)<') || '';
+    // 配送（未検証の暫定パターン）
+    p.shippingFee     = _extract(tail, '(?:配送料|送料)[^<]*([\\d,]+円|無料|FREE)') ||
+                        _extract(tail, 'shipping[_-]?(?:fee|cost)[^>]*>([^<]+)<');
+    p.isFreeShip       = /無料|FREE|0円/i.test(p.shippingFee);
+    p.shippingDays     = _extract(tail, '(?:発送|配送)[^<]*?(\\d+)[^<]*?(?:日|days?)') || '';
+    p.shippingMethod   = _extract(tail, '(?:配送方法|shipping method)[^<]*<[^>]+>([^<]+)<') || '';
 
-    // 販売累計・レビュー（Qoo10の主要KPI）
-    p.totalSales   = _num(_extract(html, '販売累計[^<]*<[^>]+>([\\d,]+)') ||
-                          _extract(html, 'sales[_-]?count[^>]*>([\\d,]+)') ||
-                          _extract(html, '"totalSales"\\s*:\\s*(\\d+)'));
-    p.reviewCount  = _num(_extract(html, '(?:レビュー|review)[^<]*?([\\d,]+)件') ||
-                          _extract(html, '"reviewCount"\\s*:\\s*(\\d+)') ||
-                          _extract(html, 'review[_-]?count[^>]*>([\\d,]+)'));
-    p.reviewScore  = _num(_extract(html, '"ratingValue"\\s*:\\s*([\\d.]+)') ||
-                          _extract(html, 'class="[^"]*rating[^"]*"[^>]*>([\\d.]+)<'));
-    p.wishlistCount= _num(_extract(html, 'wishlist[^>]*>([\\d,]+)') ||
-                          _extract(html, '気になる[^<]*([\\d,]+)'));
+    // 店舗名（mshop_bar内のshopリンクのslugから推定。表示名が取れた場合はそちらを優先）
+    var shopSlug = _extract(tail, '/shop/([a-zA-Z0-9_-]+)');
+    p.shopName   = _extract(tail, 'class="[^"]*shop[_-]?nm[^"]*"[^>]*>([^<]+)<') ||
+                  _extract(tail, '/shop/[a-zA-Z0-9_-]+"[^>]*>([^<]+)<') ||
+                  (shopSlug ? shopSlug.replace(/[_-]/g, ' ') : '');  // 推測フォールバック
 
-    // 画像
-    var imgUrls = _extractAll(html, 'itemprop="image"[^>]+content="([^"]+)"');
-    if (imgUrls.length === 0) {
-      imgUrls = _extractAll(html, '<img[^>]+class="[^"]*(?:thumb|product)[^"]*"[^>]+src="([^"]+)"');
-    }
-    p.imageCount  = imgUrls.length;
-    p.mainImage   = imgUrls[0] || '';
-    p.hasVideo    = /(?:youtube|vimeo|mp4|\.m3u8|video)/i.test(html);
+    // 販売累計・レビュー（JSON-LDに含まれないため要実データ検証。現状は未確定の暫定パターン）
+    p.totalSales  = _num(_extract(tail, '販売累計[^<]*<[^>]+>([\\d,]+)') ||
+                         _extract(tail, 'sales[_-]?count[^>]*>([\\d,]+)'));
+    p.reviewCount = _num(_extract(tail, '(?:レビュー|review)[^<]*?([\\d,]+)件') ||
+                         _extract(tail, 'review[_-]?count[^>]*>([\\d,]+)'));
+    p.reviewScore = _num(_extract(tail, 'class="[^"]*rating[^"]*"[^>]*>([\\d.]+)<'));
+    p.wishlistCount = _num(_extract(tail, 'wishlist[^>]*>([\\d,]+)') ||
+                           _extract(tail, '気になる[^<]*([\\d,]+)'));
 
-    // カテゴリ
-    p.category    = _extract(html, '"category"\\s*:\\s*"([^"]+)"') ||
-                    _extractAll(html, 'class="[^"]*breadcrumb[^"]*"[^>]*>([^<]+)<').join(' > ');
+    // カテゴリ（未検証の暫定パターン）
+    p.category = _extractAll(html, 'class="[^"]*breadcrumb[^"]*"[^>]*>([^<]+)<').join(' > ');
 
-    // 店舗評価
-    p.storeScore  = _num(_extract(html, 'seller[_-]?(?:score|rating)[^>]*>([\\d.]+)'));
-    p.storeGrade  = _extract(html, 'seller[_-]?grade[^>]*>([^<]+)<') || '';
+    // 店舗評価（未検証の暫定パターン）
+    p.storeScore = _num(_extract(tail, 'seller[_-]?(?:score|rating)[^>]*>([\\d.]+)'));
+    p.storeGrade = _extract(tail, 'seller[_-]?grade[^>]*>([^<]+)<') || '';
 
-    // 上市日（推測：JSON-LDのdatePublished）
-    p.listedDate  = _extract(html, '"datePublished"\\s*:\\s*"([^"]+)"') || '';
+    // 上市日（JSON-LDにdatePublishedがあれば使用。今回未確認のため空の可能性あり）
+    p.listedDate = (ld && ld.datePublished) || '';
 
-    // SKU数
-    var skus = _extractAll(html, 'class="[^"]*(?:option|sku)[^"]*"[^>]*>([^<]+)<');
+    // SKU数（未検証の暫定パターン）
+    var skus = _extractAll(tail, 'class="[^"]*(?:option|sku)[^"]*"[^>]*>([^<]+)<');
     p.skuCount = skus.length;
 
-    // タイトル長
     p.titleLength = p.title.length;
 
-    // 詳細ページ推定文字数（descriptionエリアのテキスト量）
+    // 詳細ページ推定文字数（未検証の暫定パターン）
     var descHtml = _extract(html, 'id="[^"]*(?:desc|detail|itemDetail)[^"]*"[^>]*>([\\s\\S]*?)</div>', 'i');
-    p.descLength  = descHtml ? descHtml.replace(/<[^>]+>/g, '').length : 0;
+    p.descLength = descHtml ? descHtml.replace(/<[^>]+>/g, '').length
+                 : ((ld && ld.description) || '').length;
 
     return p;
   }
