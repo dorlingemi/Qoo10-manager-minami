@@ -114,7 +114,12 @@ var Parser = (function () {
     p.salePrice     = salePrice ||
                       _num(_extract(html, 'data-price="(\\d+)"')) ||
                       _num(_extract(html, 'id="sell_price"\\s+value="(\\d+)"'));
+    // 実データ検証済み: タイムセール中は dl_sell_price(id="dl_sell_price") の data-price が
+    // 「販売価格」（セール前の定価）を表し、実際の決済額はJSON-LD/itemprop="price"側に出る。
+    // 両者が異なる場合のみ定価として採用する。
+    var listPriceFromPage = _num(_extract(html, 'id="dl_sell_price"[\\s\\S]{0,200}?data-price="(\\d+)"'));
     p.originalPrice = listPrice ||
+                      (listPriceFromPage > p.salePrice ? listPriceFromPage : 0) ||
                       _num(_extract(html, 'id="retail_price"\\s+value="(\\d+)"')) ||
                       _num(_extract(html, 'id="market_price"\\s+value="(\\d+)"'));
     p.originalPrice = p.originalPrice > p.salePrice ? p.originalPrice : 0;
@@ -151,17 +156,18 @@ var Parser = (function () {
     p.storeGrade = '';
 
     // 販売累計・レビュー
-    // ⚠️ 検証した商品（レビュー0件）にはレビューウィジェット自体が描画されておらず、
-    // HTML内に該当箇所が存在しなかった。Qoo10はレビュー有りの商品のみウィジェットを
-    // 描画する可能性が高い。レビューが付いている商品で別途検証が必要。
-    // 現状は安全側に倒し、明確なウィジェットマーカーが見つかった場合のみ採用する
-    // （誤検出を避けるため「レビュー」「件」等の緩いキーワード一致は使用しない）。
-    p.totalSales  = 0;  // Qoo10商品ページに「販売累計」表示自体が見当たらないため要再調査
-    p.reviewCount = _num(_extract(tail, 'review_total_count">\\(([\\d,]+)\\)'));
-    p.reviewScore = (function () {
-      var pct = _num(_extract(tail, 'review_rating_star"\\s+style="width:\\s*([\\d.]+)%'));
-      return pct > 0 ? Math.round((pct / 100) * 5 * 10) / 10 : 0;
-    })();
+    // 実データ検証済み（2商品: レビュー0件/202件の両方で確認）:
+    //   <span class="stfn" title="購入者の満足度" tab_name="CustomerReview">
+    //     <div class="review_star_area">
+    //       <div class="review_score"><span class="score">4.2</span></div>
+    //       <div class="review_count">(<span>202</span>)</div>
+    //     </div>
+    //   </span>
+    // レビュー評価・件数は直接テキストで取得できる（width%からの逆算は不要）。
+    // 「販売累計」はQoo10の商品ページ自体に表示が存在しないため取得不可（2商品で確認済み）。
+    p.totalSales  = 0;
+    p.reviewCount = _num(_extract(tail, 'class="review_count">\\s*\\(\\s*<span>([\\d,]+)</span>'));
+    p.reviewScore = _num(_extract(tail, 'class="review_score">\\s*<span class="score">([\\d.]+)</span>'));
     p.wishlistCount = _num(_extract(tail, 'wishlist[^>]*>([\\d,]+)') ||
                            _extract(tail, '気になる[^<]*([\\d,]+)'));
 
