@@ -330,6 +330,58 @@ function debugTestSearchFetch() {
 }
 
 /**
+ * デバッグ用：商品詳細ページの生HTMLをrender-service経由で取得し、
+ * Parser.parseProduct() のフィールド抽出結果と、価格/レビュー/画像周辺の
+ * 生HTML断片をLogシートに出力する。
+ *
+ * parseProduct() の正規表現パターンはまだ実HTML未検証（推測ベース）のため、
+ * このデバッグ結果を見ながら Parser.gs の該当パターンを実データに合わせて調整する。
+ *
+ * @param {string} url  検証したいQoo10商品ページURL（例: https://www.qoo10.jp/g/1077983682）
+ */
+function debugTestProductFetch(url) {
+  if (!url) {
+    SpreadsheetApp.getUi().alert('debugTestProductFetch(url) に商品URLを渡して実行してください。');
+    return;
+  }
+
+  var html = Crawler.fetchProduct(url);
+  if (!html) {
+    AppLogger.error('debugTestProductFetch: フェッチ失敗（nullが返却された）', url);
+    return;
+  }
+
+  AppLogger.info('debugTestProductFetch 取得文字数: ' + html.length, url);
+
+  var product = Parser.parseProduct(html, url);
+  AppLogger.info('debugTestProductFetch parseProduct結果',
+    JSON.stringify({
+      title: product.title, brand: product.brand, shopName: product.shopName,
+      salePrice: product.salePrice, originalPrice: product.originalPrice,
+      reviewCount: product.reviewCount, reviewScore: product.reviewScore,
+      totalSales: product.totalSales, imageCount: product.imageCount,
+      isFreeShip: product.isFreeShip, category: product.category,
+    }));
+
+  // 主要項目周辺の生HTML断片（パターン調整の手がかり用）
+  var priceIdx  = html.search(/円/);
+  AppLogger.info('debugTestProductFetch 価格周辺HTML', html.slice(Math.max(0, priceIdx - 200), priceIdx + 200));
+
+  var reviewIdx = html.search(/レビュー|review/i);
+  if (reviewIdx >= 0) {
+    AppLogger.info('debugTestProductFetch レビュー周辺HTML', html.slice(Math.max(0, reviewIdx - 200), reviewIdx + 200));
+  }
+
+  var salesIdx = html.search(/販売累計|総販売|累計販売/);
+  if (salesIdx >= 0) {
+    AppLogger.info('debugTestProductFetch 販売累計周辺HTML', html.slice(Math.max(0, salesIdx - 200), salesIdx + 200));
+  }
+
+  SpreadsheetApp.getUi().alert('実行完了。Logシートで "debugTestProductFetch" の行を確認してください。\n' +
+    'title/salePriceが取得できていなければParser.gsのparseProduct内パターンを生HTML断片に合わせて調整します。');
+}
+
+/**
  * デバッグ用：公式API（GetItemDetailInfo）の生レスポンスをLogシートに出力する
  * OfficialApi.gs のフィールドマッピング（_mapItemDetail/_mapSellingReport）が
  * 実際のJSON構造と一致しているか検証する目的。
