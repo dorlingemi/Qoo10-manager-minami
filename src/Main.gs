@@ -384,24 +384,23 @@ function debugTestProductFetch(url) {
     AppLogger.info('debugTestProductFetch 価格候補HTML[' + i + ']', html.slice(Math.max(0, idx - 150), idx + 150));
   });
 
-  var reviewIdx = html.search(/review_total_count|review_rating_star|レビュー\s*\(|reviewCount/i);
+  // 「ac_total_」で始まるオートコンプリート用の隠しウィジェットは商品本体の情報ではないため、
+  // mshop_bar（実店舗バー）以降の範囲に限定して検索することで誤検出を避ける。
+  var afterShopBar = html.indexOf('mshop_bar');
+  var searchBase    = afterShopBar >= 0 ? afterShopBar : 0;
+  var tail          = html.slice(searchBase);
+
+  AppLogger.info('debugTestProductFetch mshop_bar以降3000文字', tail.slice(0, 3000));
+  AppLogger.info('debugTestProductFetch mshop_bar以降3000-6000文字', tail.slice(3000, 6000));
+
+  var reviewIdx = tail.search(/review_total_count|reviewCount|件のレビュー|レビュー\s*\d/i);
   if (reviewIdx >= 0) {
-    AppLogger.info('debugTestProductFetch レビュー周辺HTML', html.slice(Math.max(0, reviewIdx - 200), reviewIdx + 300));
+    AppLogger.info('debugTestProductFetch レビュー周辺HTML(mshop_bar以降)', tail.slice(Math.max(0, reviewIdx - 200), reviewIdx + 300));
   }
 
-  var salesIdx = html.search(/販売累計|総販売数|累計販売|sales[_-]?count/i);
+  var salesIdx = tail.search(/販売累計|総販売数|累計販売|sales[_-]?count/i);
   if (salesIdx >= 0) {
-    AppLogger.info('debugTestProductFetch 販売累計周辺HTML', html.slice(Math.max(0, salesIdx - 200), salesIdx + 200));
-  }
-
-  var shopIdx = html.search(/lnk_sh|seller[_-]?name|shop[_-]?name|class="[^"]*shop/i);
-  if (shopIdx >= 0) {
-    AppLogger.info('debugTestProductFetch 店舗名周辺HTML', html.slice(Math.max(0, shopIdx - 150), shopIdx + 250));
-  }
-
-  var imgIdx = html.search(/class="[^"]*(?:thumb|gallery|img_list|prd_img)/i);
-  if (imgIdx >= 0) {
-    AppLogger.info('debugTestProductFetch 画像ギャラリー周辺HTML', html.slice(Math.max(0, imgIdx - 100), imgIdx + 600));
+    AppLogger.info('debugTestProductFetch 販売累計周辺HTML(mshop_bar以降)', tail.slice(Math.max(0, salesIdx - 200), salesIdx + 200));
   }
 
   SpreadsheetApp.getUi().alert('実行完了。Logシートで "debugTestProductFetch" 関連の行を確認してください。\n' +
