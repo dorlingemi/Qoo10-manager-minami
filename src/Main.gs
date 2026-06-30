@@ -405,6 +405,15 @@ function debugTestProductFetch(url) {
     '特に JSON-LD が見つかっていればそれを最優先でParser.gsに反映します。');
 }
 
+/**
+ * デバッグ用：debugTestProductFetch を固定URLで実行するためのラッパー。
+ * GASエディタの関数選択ドロップダウンは引数なし関数しか直接実行できないため、
+ * 検証したい商品URLをここに書き換えて実行する。
+ */
+function runDebugTestProductFetch() {
+  debugTestProductFetch('https://www.qoo10.jp/g/1184922467');
+}
+
 /** 正規表現に一致する全位置のindexを配列で返す（デバッグ用） */
 function _findAllIndexes(text, regex) {
   var indexes = [];
