@@ -367,7 +367,10 @@ function debugTestProductFetch(url) {
   var ldJsonBlocks = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
   if (ldJsonBlocks) {
     ldJsonBlocks.forEach(function (block, i) {
-      AppLogger.info('debugTestProductFetch JSON-LD[' + i + ']', block.slice(0, 1500));
+      AppLogger.info('debugTestProductFetch JSON-LD[' + i + '] (1/2)', block.slice(0, 1500));
+      if (block.length > 1500) {
+        AppLogger.info('debugTestProductFetch JSON-LD[' + i + '] (2/2)', block.slice(1500, 3000));
+      }
     });
   } else {
     AppLogger.info('debugTestProductFetch JSON-LD', '見つかりませんでした');
