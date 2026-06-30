@@ -20,7 +20,11 @@ var CONFIG = {
     // 実ブラウザで確認済み: https://www.qoo10.jp/s/{keyword}?keyword={keyword}&keyword_auto_change=
     SEARCH_URL:          'https://www.qoo10.jp/s/',
     PRODUCT_URL_PREFIX:  'https://www.qoo10.jp/g/',
-    MAX_COMPETITORS:     20,      // 每次最多采集竞争商品数
+    // ⚠️ GASは1回の実行が6分（無料Googleアカウント）または30分（Workspace）で
+    // 強制終了される。Render無料層は1商品あたりのレンダリングに約90-100秒かかるため
+    // （リソース制限によるものと推測。有料プランへのアップグレードで改善が期待できる）、
+    // 6分制限内に収まるよう保守的に2件に設定。増やす場合は実行環境のプラン・時間制限を確認すること。
+    MAX_COMPETITORS:     2,       // 每次最多采集竞争商品数
     SEARCH_PAGE:         1,       // 搜索起始页
     REQUEST_DELAY_MS:    2000,    // 每次请求间隔（毫秒）
     RETRY_COUNT:         3,       // 失败重试次数
