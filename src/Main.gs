@@ -322,7 +322,7 @@ function debugTestSearchFetch() {
   var items = Parser.parseSearchResults(html);
   AppLogger.info('debugTestSearchFetch 商品抽出件数: ' + items.length, html.length + '文字取得');
 
-  SpreadsheetApp.getUi().alert(
+  _safeAlert(
     items.length > 0
       ? '取得成功。商品 ' + items.length + ' 件を抽出しました。'
       : '⚠️ 商品が0件でした。ブロックされたかHTML構造が変わった可能性があります。Logシートを確認してください。'
@@ -341,7 +341,7 @@ function debugTestSearchFetch() {
  */
 function debugTestProductFetch(url) {
   if (!url) {
-    SpreadsheetApp.getUi().alert('debugTestProductFetch(url) に商品URLを渡して実行してください。');
+    _safeAlert('debugTestProductFetch(url) に商品URLを渡して実行してください。');
     return;
   }
 
@@ -396,7 +396,7 @@ function debugTestProductFetch(url) {
     AppLogger.info('debugTestProductFetch goodsDetailWrap以降[' + c + '] (' + (c * CHUNK) + '-' + ((c + 1) * CHUNK) + ')', chunkText);
   }
 
-  SpreadsheetApp.getUi().alert('実行完了。Logシートで "debugTestProductFetch" 関連の行を確認してください。\n' +
+  _safeAlert('実行完了。Logシートで "debugTestProductFetch" 関連の行を確認してください。\n' +
     '特に JSON-LD が見つかっていればそれを最優先でParser.gsに反映します。');
 }
 
@@ -407,6 +407,19 @@ function debugTestProductFetch(url) {
  */
 function runDebugTestProductFetch() {
   debugTestProductFetch('https://www.qoo10.jp/g/1184922467');
+}
+
+/**
+ * GASエディタから直接実行した場合（スプレッドシートのUIコンテキスト外）は
+ * SpreadsheetApp.getUi() が例外を投げるため、それを握りつぶすラッパー。
+ * デバッグ関数はLogシートへの出力が本体なので、アラート表示の失敗は無視してよい。
+ */
+function _safeAlert(message) {
+  try {
+    SpreadsheetApp.getUi().alert(message);
+  } catch (e) {
+    AppLogger.info('_safeAlert: UIコンテキスト外のためアラート表示をスキップ', message.slice(0, 100));
+  }
 }
 
 /** 正規表現に一致する全位置のindexを配列で返す（デバッグ用） */
@@ -432,13 +445,13 @@ function _findAllIndexes(text, regex) {
  */
 function debugTestOfficialApi(itemCode) {
   if (!itemCode) {
-    SpreadsheetApp.getUi().alert('debugTestOfficialApi(itemCode) に自社の商品コードを渡して実行してください。');
+    _safeAlert('debugTestOfficialApi(itemCode) に自社の商品コードを渡して実行してください。');
     return;
   }
 
   if (!CONFIG.OFFICIAL_API.ENABLED) {
     AppLogger.error('debugTestOfficialApi: OFFICIAL_API.ENABLED が false です', itemCode);
-    SpreadsheetApp.getUi().alert('Config.gs の OFFICIAL_API.ENABLED を true にしてから再実行してください。');
+    _safeAlert('Config.gs の OFFICIAL_API.ENABLED を true にしてから再実行してください。');
     return;
   }
 
@@ -453,7 +466,7 @@ function debugTestOfficialApi(itemCode) {
   var report = OfficialApi.getSellingReport(itemCode);
   AppLogger.info('debugTestOfficialApi: GetSellingReportDetailList 集計結果', JSON.stringify(report));
 
-  SpreadsheetApp.getUi().alert('実行完了。Logシートで "debugTestOfficialApi" の行を確認してください。\n' +
+  _safeAlert('実行完了。Logシートで "debugTestOfficialApi" の行を確認してください。\n' +
     '特に "raw" フィールドに実際のJSON生データが入っているので、それを元にフィールド名を調整します。');
 }
 
