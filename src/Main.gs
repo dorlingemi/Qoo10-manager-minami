@@ -393,6 +393,14 @@ function debugTestProductFetch(url) {
   AppLogger.info('debugTestProductFetch mshop_bar以降3000文字', tail.slice(0, 3000));
   AppLogger.info('debugTestProductFetch mshop_bar以降3000-6000文字', tail.slice(3000, 6000));
 
+  // mshop_bar直前（商品タイトル/価格/レビューのヘッダー部分があると推測される領域）
+  if (afterShopBar >= 0) {
+    var headStart = Math.max(0, afterShopBar - 8000);
+    var head      = html.slice(headStart, afterShopBar);
+    AppLogger.info('debugTestProductFetch mshop_bar直前1/2(末尾4000文字)', head.slice(-4000, -2000));
+    AppLogger.info('debugTestProductFetch mshop_bar直前2/2(末尾2000文字)', head.slice(-2000));
+  }
+
   var reviewIdx = tail.search(/review_total_count|reviewCount|件のレビュー|レビュー\s*\d/i);
   if (reviewIdx >= 0) {
     AppLogger.info('debugTestProductFetch レビュー周辺HTML(mshop_bar以降)', tail.slice(Math.max(0, reviewIdx - 200), reviewIdx + 300));
