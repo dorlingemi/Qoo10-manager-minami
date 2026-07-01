@@ -91,6 +91,16 @@ var CONFIG = {
     SLOW_DAYS:       7,    // 「遅い」と判定する配送日数
   },
 
+  // ── Lark Bitable連携 ──────────────────────────────────
+  // 分析結果をLark多維表格（Bitable）に永続保存する設定。
+  // ⚠️ APP_SECRETは機密情報。GASエディタで直接書き換えること。チャット等に貼らないこと。
+  LARK: {
+    ENABLED:           false,              // trueにするとrunAll完了後に自動同期
+    APP_ID:            'cli_aaaa765c9fe15e17',
+    APP_SECRET:        'YOUR_APP_SECRET_HERE',  // ← GASエディタで直接書き換える
+    BITABLE_APP_TOKEN: 'KlOLbIpGbaV6Q1s1T1PjXM7npAb',
+  },
+
   // ── Triggerスケジュール ───────────────────────────────
   TRIGGER: {
     DAILY_HOUR:    3,      // 毎日何時に自動実行するか（0-23）

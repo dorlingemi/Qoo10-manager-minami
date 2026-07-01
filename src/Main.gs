@@ -56,6 +56,7 @@ function runAll() {
   });
 
   Dashboard.refresh();
+  LarkApi.syncToLark();
   AppLogger.info('===== runAll 完了 =====');
   SpreadsheetApp.getActiveSpreadsheet().toast('分析完了！', 'Qoo10分析', 5);
 }
