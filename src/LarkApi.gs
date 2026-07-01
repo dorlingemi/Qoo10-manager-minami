@@ -162,35 +162,35 @@ var LarkApi = (function () {
 
   // ── シート列名 → Larkフィールド名マッピング ──────────────
 
+  // シート列名はSheetWriter.gsのPRODUCT_HEADERS/COMPETITOR_HEADERSに合わせる
   var PRODUCTS_MAP = [
-    { sheetCol: 'keyword',       larkField: 'キーワード' },
-    { sheetCol: 'title',         larkField: 'タイトル' },
-    { sheetCol: 'salePrice',     larkField: '販売価格' },
-    { sheetCol: 'originalPrice', larkField: '定価' },
-    { sheetCol: 'reviewCount',   larkField: 'レビュー数' },
-    { sheetCol: 'reviewScore',   larkField: 'レビュースコア' },
-    { sheetCol: 'category',      larkField: 'カテゴリ' },
-    { sheetCol: 'shopName',      larkField: 'ショップ名' },
-    { sheetCol: 'storeScore',    larkField: '店舗評価' },
-    { sheetCol: 'isFreeShip',    larkField: '送料無料' },
-    { sheetCol: 'shippingCountry', larkField: '発送国' },
-    { sheetCol: 'recentMoSales', larkField: '推定月間売上数' },
-    { sheetCol: 'recentMoRevenue', larkField: '推定月間売上額' },
-    { sheetCol: 'totalScore',    larkField: '総合スコア' },
-    { sheetCol: 'url',           larkField: 'URL' },
+    { sheetCol: '入力キー',              larkField: 'キーワード' },
+    { sheetCol: '商品名',                larkField: 'タイトル' },
+    { sheetCol: '販売価格',              larkField: '販売価格' },
+    { sheetCol: '定価',                  larkField: '定価' },
+    { sheetCol: 'レビュー数',            larkField: 'レビュー数' },
+    { sheetCol: 'レビュー評価',          larkField: 'レビュースコア' },
+    { sheetCol: 'カテゴリ',              larkField: 'カテゴリ' },
+    { sheetCol: '店舗',                  larkField: 'ショップ名' },
+    { sheetCol: '店舗評価',              larkField: '店舗評価' },
+    { sheetCol: '送料無料',              larkField: '送料無料' },
+    { sheetCol: '月平均販売推計',        larkField: '推定月間売上数' },
+    { sheetCol: '直近3ヶ月売上推計(円)', larkField: '推定月間売上額' },
+    { sheetCol: '総合スコア',            larkField: '総合スコア' },
+    { sheetCol: 'URL',                   larkField: 'URL' },
   ];
 
   var COMPETITORS_MAP = [
-    { sheetCol: 'keyword',     larkField: 'キーワード' },
-    { sheetCol: 'rank',        larkField: '順位' },
-    { sheetCol: 'isSponsored', larkField: '広告' },
-    { sheetCol: 'title',       larkField: 'タイトル' },
-    { sheetCol: 'salePrice',   larkField: '販売価格' },
-    { sheetCol: 'reviewCount', larkField: 'レビュー数' },
-    { sheetCol: 'reviewScore', larkField: 'レビュースコア' },
-    { sheetCol: 'shopName',    larkField: 'ショップ名' },
-    { sheetCol: 'totalScore',  larkField: '総合スコア' },
-    { sheetCol: 'url',         larkField: 'URL' },
+    { sheetCol: '検索キー',              larkField: 'キーワード' },
+    { sheetCol: '順位',                  larkField: '順位' },
+    { sheetCol: 'スポンサー',            larkField: '広告' },
+    { sheetCol: '商品名',                larkField: 'タイトル' },
+    { sheetCol: '販売価格',              larkField: '販売価格' },
+    { sheetCol: 'レビュー数',            larkField: 'レビュー数' },
+    { sheetCol: 'レビュー評価',          larkField: 'レビュースコア' },
+    { sheetCol: '店舗',                  larkField: 'ショップ名' },
+    { sheetCol: '総合スコア',            larkField: '総合スコア' },
+    { sheetCol: 'URL',                   larkField: 'URL' },
   ];
 
   // ── メイン同期関数 ────────────────────────────────────────
