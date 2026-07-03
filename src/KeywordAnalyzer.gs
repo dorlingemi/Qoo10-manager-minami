@@ -194,10 +194,8 @@ var KeywordAnalyzer = (function () {
     // 有効性スコア列に条件付き書式（高スコア = 濃い緑）
     var scoreCol   = sheet.getRange(2, 10, sheet.getLastRow() - 1, 1);
     var rule = SpreadsheetApp.newConditionalFormatRule()
-      .setGradientMaxpointWithValue(SpreadsheetApp.InterpolationType.NUMBER,
-        '#00C853', '100')
-      .setGradientMinpointWithValue(SpreadsheetApp.InterpolationType.NUMBER,
-        '#FFFFFF', '0')
+      .setGradientMaxpointWithValue('#00C853', SpreadsheetApp.InterpolationType.NUMBER, '100')
+      .setGradientMinpointWithValue('#FFFFFF', SpreadsheetApp.InterpolationType.NUMBER, '0')
       .setRanges([scoreCol])
       .build();
     sheet.setConditionalFormatRules([rule]);
