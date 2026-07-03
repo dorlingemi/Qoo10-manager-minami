@@ -149,7 +149,10 @@ var KeywordAnalyzer = (function () {
       sheet = ss.insertSheet(sheetName);
     }
 
-    // ヘッダー行
+    // 毎回クリアして書き直し
+    sheet.clearContents();
+    sheet.clearFormats();
+
     var headers = [
       'キーワード', 'トークン', '出現件数', '出現率(%)',
       '上位5件中', '上位集中度(%)', '平均レビュー数',
@@ -157,39 +160,20 @@ var KeywordAnalyzer = (function () {
     ];
 
     var rows = [headers];
-
     stats.forEach(function (s) {
       rows.push([
-        keyword,
-        s.token,
-        s.docs,
-        s.freqPct,
-        s.topDocs,
-        s.topScore,
-        s.avgReview,
-        s.reviewScore,
-        s.organicPct,
-        s.effectScore,
+        keyword, s.token, s.docs, s.freqPct,
+        s.topDocs, s.topScore, s.avgReview,
+        s.reviewScore, s.organicPct, s.effectScore,
       ]);
     });
 
-    // 追記（既存データの下に追加）
-    var lastRow = sheet.getLastRow();
-    if (lastRow === 0) {
-      sheet.getRange(1, 1, rows.length, headers.length).setValues(rows);
-      // ヘッダー書式
-      sheet.getRange(1, 1, 1, headers.length)
-        .setFontWeight('bold')
-        .setBackground('#1F3864')
-        .setFontColor('#FFFFFF');
-      sheet.setFrozenRows(1);
-    } else {
-      // ヘッダーはスキップしてデータ行のみ追記
-      var dataRows = rows.slice(1);
-      if (dataRows.length) {
-        sheet.getRange(lastRow + 1, 1, dataRows.length, headers.length).setValues(dataRows);
-      }
-    }
+    sheet.getRange(1, 1, rows.length, headers.length).setValues(rows);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setFontWeight('bold')
+      .setBackground('#1F3864')
+      .setFontColor('#FFFFFF');
+    sheet.setFrozenRows(1);
 
     // 有効性スコアに応じて背景色を塗る（高≥70=緑, 中40-69=黄, 低<40=白）
     var dataRows = sheet.getLastRow() - 1;
