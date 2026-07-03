@@ -13,6 +13,8 @@ function onOpen() {
     .createMenu('🔍 Qoo10分析')
     .addItem('▶ 分析実行（全入力）',      'runAll')
     .addSeparator()
+    .addItem('🔤 キーワード分析',          'runKeywordAnalysisPrompt')
+    .addSeparator()
     .addItem('📊 ダッシュボード更新',       'runDashboardOnly')
     .addSeparator()
     .addItem('⏰ 自動実行Triggerを設定',   'setupTriggers')
@@ -59,6 +61,18 @@ function runAll() {
   LarkApi.syncToLark();
   AppLogger.info('===== runAll 完了 =====');
   SpreadsheetApp.getActiveSpreadsheet().toast('分析完了！', 'Qoo10分析', 5);
+}
+
+/**
+ * メニューからキーワード分析を起動する（ダイアログでキーワード入力）
+ */
+function runKeywordAnalysisPrompt() {
+  var ui      = SpreadsheetApp.getUi();
+  var result  = ui.prompt('キーワード分析', '分析するキーワードを入力してください：', ui.ButtonSet.OK_CANCEL);
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+  var keyword = result.getResponseText().trim();
+  if (!keyword) return;
+  KeywordAnalyzer.run(keyword);
 }
 
 /**
