@@ -259,7 +259,7 @@ function _extractKeyword(title, category) {
   var cleaned = title.replace(/[\[【(（][^\]】)）]*[\]】)）]/g, ' ').trim();
 
   // 日本語連続文字列（ひらがな/カタカナ/漢字、2文字以上）を抽出
-  var jpMatches = cleaned.match(/[ぁ-んァ-ヶ一-龠]{2,}/g);
+  var jpMatches = cleaned.match(/[ぁ-んァ-ヾ一-龠]{2,}/g);
 
   if (jpMatches && jpMatches.length > 0) {
     // 最も長い日本語トークンを優先（一般的に商品種別名になりやすい）
