@@ -191,14 +191,19 @@ var KeywordAnalyzer = (function () {
       }
     }
 
-    // 有効性スコア列に条件付き書式（高スコア = 濃い緑）
-    var scoreCol   = sheet.getRange(2, 10, sheet.getLastRow() - 1, 1);
-    var rule = SpreadsheetApp.newConditionalFormatRule()
-      .setGradientMaxpointWithValue('#00C853', SpreadsheetApp.InterpolationType.NUMBER, '100')
-      .setGradientMinpointWithValue('#FFFFFF', SpreadsheetApp.InterpolationType.NUMBER, '0')
-      .setRanges([scoreCol])
-      .build();
-    sheet.setConditionalFormatRules([rule]);
+    // 有効性スコアに応じて背景色を塗る（高≥70=緑, 中40-69=黄, 低<40=白）
+    var dataRows = sheet.getLastRow() - 1;
+    if (dataRows > 0) {
+      var scoreRange = sheet.getRange(2, 10, dataRows, 1);
+      var scores = scoreRange.getValues();
+      var colors = scores.map(function (row) {
+        var s = row[0];
+        if (s >= 70) return ['#C8E6C9'];
+        if (s >= 40) return ['#FFF9C4'];
+        return ['#FFFFFF'];
+      });
+      scoreRange.setBackgrounds(colors);
+    }
 
     sheet.autoResizeColumns(1, headers.length);
     AppLogger.info('KeywordAnalyzer: 書き込み完了', keyword + ' / ' + stats.length + 'トークン');
