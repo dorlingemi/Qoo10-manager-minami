@@ -14,6 +14,7 @@ function onOpen() {
     .addItem('▶ 分析実行（全入力）',      'runAll')
     .addSeparator()
     .addItem('🔤 キーワード分析',          'runKeywordAnalysisPrompt')
+    .addItem('💰 購買価値チェック',        'runKeywordValuePrompt')
     .addItem('📍 順位確認',               'runRankCheckPrompt')
     .addSeparator()
     .addItem('📊 ダッシュボード更新',       'runDashboardOnly')
@@ -64,6 +65,18 @@ function runAll() {
   LarkApi.syncToLark();
   AppLogger.info('===== runAll 完了 =====');
   SpreadsheetApp.getActiveSpreadsheet().toast('分析完了！', 'Qoo10分析', 5);
+}
+
+/**
+ * メニューから購買価値チェックを起動する
+ */
+function runKeywordValuePrompt() {
+  var ui     = SpreadsheetApp.getUi();
+  var result = ui.prompt('購買価値チェック', 'チェックするキーワードを入力してください：', ui.ButtonSet.OK_CANCEL);
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+  var keyword = result.getResponseText().trim();
+  if (!keyword) return;
+  KeywordValue.check(keyword);
 }
 
 /**
