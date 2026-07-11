@@ -156,8 +156,16 @@ app.post('/autocomplete', async (req, res) => {
       timeout: 30000,
     });
 
+    // ポップアップ・Cookie同意バナーを閉じる（クリックをブロックするため先に処理）
+    for (const sel of DISMISS_SELECTORS) {
+      try {
+        const el = await page.$(sel);
+        if (el) await el.click({ timeout: 2000 });
+      } catch (e) { /* 存在しない場合は無視 */ }
+    }
+    await page.waitForTimeout(500);
+
     // 検索ボックスを探して入力
-    // Qoo10のサイト構造に合わせて複数のセレクタ候補を試す
     const INPUT_SELECTORS = [
       'input[name="keyword"]',
       'input[type="search"]',
@@ -166,19 +174,20 @@ app.post('/autocomplete', async (req, res) => {
       'input[placeholder*="検索"]',
     ];
 
-    let inputEl = null;
+    let inputSel = null;
     for (const sel of INPUT_SELECTORS) {
-      inputEl = await page.$(sel);
-      if (inputEl) break;
+      const el = await page.$(sel);
+      if (el) { inputSel = sel; break; }
     }
 
-    if (!inputEl) {
+    if (!inputSel) {
       return res.status(500).json({ error: '検索ボックスが見つかりませんでした' });
     }
 
-    await inputEl.click();
-    await inputEl.fill('');
-    await inputEl.type(keyword, { delay: 80 });
+    // click()の代わりにfocus()を使い、タイムアウトを回避
+    await page.focus(inputSel);
+    await page.fill(inputSel, '');
+    await page.type(inputSel, keyword, { delay: 80 });
 
     // 補完ドロップダウンが出るまで最大3秒待機
     const SUGGEST_SELECTORS = [

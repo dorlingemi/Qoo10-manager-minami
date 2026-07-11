@@ -25,7 +25,9 @@ var KeywordSuggest = (function () {
       return [];
     }
 
-    var url     = cfg.SERVICE_URL.replace(/\/$/, '') + '/autocomplete';
+    // SERVICE_URL が /render で終わっている場合は除去してベースURLを取得
+    var baseUrl = cfg.SERVICE_URL.replace(/\/render\/?$/, '').replace(/\/$/, '');
+    var url     = baseUrl + '/autocomplete';
     var payload = JSON.stringify({ keyword: keyword });
 
     try {
