@@ -14,6 +14,7 @@ function onOpen() {
     .addItem('▶ 分析実行（全入力）',      'runAll')
     .addSeparator()
     .addItem('🔤 キーワード分析',          'runKeywordAnalysisPrompt')
+    .addItem('📍 順位確認',               'runRankCheckPrompt')
     .addSeparator()
     .addItem('📊 ダッシュボード更新',       'runDashboardOnly')
     .addSeparator()
@@ -61,6 +62,25 @@ function runAll() {
   LarkApi.syncToLark();
   AppLogger.info('===== runAll 完了 =====');
   SpreadsheetApp.getActiveSpreadsheet().toast('分析完了！', 'Qoo10分析', 5);
+}
+
+/**
+ * メニューから順位確認を起動する（キーワード + 商品URL/IDを入力）
+ */
+function runRankCheckPrompt() {
+  var ui = SpreadsheetApp.getUi();
+  var r1 = ui.prompt('順位確認 (1/2)', '検索キーワードを入力してください：', ui.ButtonSet.OK_CANCEL);
+  if (r1.getSelectedButton() !== ui.Button.OK) return;
+  var keyword = r1.getResponseText().trim();
+  if (!keyword) return;
+
+  var r2 = ui.prompt('順位確認 (2/2)', '商品URL または 商品IDを入力してください：', ui.ButtonSet.OK_CANCEL);
+  if (r2.getSelectedButton() !== ui.Button.OK) return;
+  var target = r2.getResponseText().trim();
+  if (!target) return;
+
+  ui.alert('検索中...（最大5ページ分かかります）\nログシートで進捗を確認できます。');
+  RankChecker.check(keyword, target);
 }
 
 /**
@@ -483,6 +503,19 @@ function debugTestOfficialApi(itemCode) {
 
   _safeAlert('実行完了。Logシートで "debugTestOfficialApi" の行を確認してください。\n' +
     '特に "raw" フィールドに実際のJSON生データが入っているので、それを元にフィールド名を調整します。');
+}
+
+/**
+ * RankHistoryシートをアクティブにする
+ */
+function openRankHistory() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('RankHistory');
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert('順位履歴がまだありません。\nChrome拡張機能で収集を実行してください。');
+    return;
+  }
+  ss.setActiveSheet(sheet);
 }
 
 /**
