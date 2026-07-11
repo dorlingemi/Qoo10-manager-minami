@@ -38,6 +38,7 @@ var KeywordSuggest = (function () {
         headers:            { 'x-api-key': cfg.API_KEY },
         muteHttpExceptions: true,
         followRedirects:    true,
+        deadline:           120,  // 2分タイムアウト（冷起動対策）
       });
 
       var code = resp.getResponseCode();

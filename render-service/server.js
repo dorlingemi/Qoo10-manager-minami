@@ -160,7 +160,7 @@ app.post('/autocomplete', async (req, res) => {
 
     await page.goto('https://www.qoo10.jp/', {
       waitUntil: 'domcontentloaded',
-      timeout: 30000,
+      timeout: 60000,
     });
 
     // ポップアップを閉じる
@@ -170,7 +170,7 @@ app.post('/autocomplete', async (req, res) => {
         if (el) await el.click({ timeout: 2000 });
       } catch (e) {}
     }
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(300);
 
     // 検索ボックスを探す
     const INPUT_SELECTORS = [
@@ -194,10 +194,10 @@ app.post('/autocomplete', async (req, res) => {
     // キーワードを入力して補完候補を出現させる
     await page.focus(inputSel);
     await page.fill(inputSel, '');
-    await page.type(inputSel, keyword, { delay: 120 });
+    await page.type(inputSel, keyword, { delay: 100 });
 
     // 補完ドロップダウンが描画されるまで待機
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2000);
 
     // キーワードの先頭2文字で部分一致フィルタ（ナビ・無関係リストを除外）
     const prefix = keyword.slice(0, 2);
