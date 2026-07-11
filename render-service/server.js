@@ -253,12 +253,24 @@ app.post('/autocomplete', async (req, res) => {
       }
     }
 
-    // ③ デバッグ用：DOM全体のli要素のテキストをログに出力
+    // ③ liテキストから補完候補をフィルタリング（ナビゲーション項目を除外）
     if (suggestions.length === 0) {
       const allLiTexts = await page.$$eval('li', els =>
-        els.map(el => el.className + ':' + el.innerText.slice(0, 40)).filter(t => t.length > 2).slice(0, 30)
+        els.map(el => el.innerText.trim()).filter(t => t.length > 0)
       );
-      console.log('[autocomplete] all li elements:', JSON.stringify(allLiTexts));
+      console.log('[autocomplete] all li texts:', JSON.stringify(allLiTexts.slice(0, 40)));
+
+      suggestions = allLiTexts.filter(text => {
+        // 英語ナビ系を除外
+        if (/^Go to|^Skip/i.test(text)) return false;
+        // 二重コロン系ナビ（first:, my:, cart:, qpost:, new: 等）を除外
+        if (/^(first|my|cart|qpost|new|help):/i.test(text)) return false;
+        // 純英語テキストを除外
+        if (/^[A-Za-z\s]+$/.test(text)) return false;
+        // 1文字以下を除外
+        if (text.length < 2) return false;
+        return true;
+      });
     }
 
     res.json({ keyword, suggestions });
