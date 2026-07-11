@@ -156,27 +156,22 @@ app.post('/autocomplete', async (req, res) => {
       timeout: 30000,
     });
 
-    // 補完APIのレスポンスをネットワークレベルで傍受する
+    // Qoo10補完APIのレスポンスをネットワークレベルで直接傍受する
     let suggestions = [];
-    let interceptedBody = null;
+    let autocompleteResponse = null;
 
-    await page.route('**/*', async (route) => {
-      const url = route.request().url();
-      // Qoo10の補完関連リクエストを記録（URLパターンで絞り込む）
-      if (/suggest|autocomplete|complete|keyword/i.test(url) && !/\.(js|css|png|jpg|gif|woff)/i.test(url)) {
-        console.log('[autocomplete] intercepted:', url);
-      }
-      await route.continue();
-    });
-
-    // レスポンスを監視してJSONを拾う
+    // キーワード補完専用APIのレスポンスを捕捉
     page.on('response', async (response) => {
       const url = response.url();
-      if (/suggest|autocomplete|complete/i.test(url) && !/\.(js|css|png|jpg|gif|woff)/i.test(url)) {
+      if (url.includes('GetPopularHotKeywordSearchList') ||
+          url.includes('GetAutoCompleteKeyword') ||
+          url.includes('keyword_suggest') ||
+          url.includes('search_suggest')) {
         try {
           const body = await response.text();
-          console.log('[autocomplete] response url:', url, 'body:', body.slice(0, 300));
-          if (!interceptedBody) interceptedBody = body;
+          console.log('[autocomplete] API hit:', url);
+          console.log('[autocomplete] API body:', body.slice(0, 500));
+          if (!autocompleteResponse) autocompleteResponse = body;
         } catch (e) {}
       }
     });
@@ -214,7 +209,7 @@ app.post('/autocomplete', async (req, res) => {
       return res.status(500).json({ error: '検索ボックスが見つかりませんでした' });
     }
 
-    // キーワードを1文字ずつ入力（補完リクエストを発火させる）
+    // キーワードを入力して補完APIを発火させる
     await page.focus(inputSel);
     await page.fill(inputSel, '');
     await page.type(inputSel, keyword, { delay: 120 });
@@ -222,55 +217,37 @@ app.post('/autocomplete', async (req, res) => {
     // 補完レスポンスが来るまで最大4秒待機
     await page.waitForTimeout(4000);
 
-    // ① ネットワーク傍受で取れた場合
-    if (interceptedBody) {
+    // ① APIレスポンスをパース
+    if (autocompleteResponse) {
       try {
-        const json = JSON.parse(interceptedBody);
-        // レスポンス形式を推測: 配列 or {list:[...]} or {data:[...]}
-        if (Array.isArray(json)) {
-          suggestions = json.map(i => (typeof i === 'string' ? i : i.keyword || i.text || i.word || '')).filter(Boolean);
-        } else if (json.list)  suggestions = json.list.map(i => typeof i === 'string' ? i : i.keyword || '').filter(Boolean);
-        else if (json.data)   suggestions = json.data.map(i => typeof i === 'string' ? i : i.keyword || '').filter(Boolean);
-      } catch (e) {
-        console.log('[autocomplete] JSON parse failed:', e.message);
-      }
-    }
+        // Qoo10はJSONP形式 or 純JSON の可能性がある
+        const cleaned = autocompleteResponse.replace(/^[^(]*\(/, '').replace(/\);?\s*$/, '');
+        const json = JSON.parse(cleaned);
+        console.log('[autocomplete] parsed json keys:', Object.keys(json));
 
-    // ② DOMから拾う（フォールバック）
-    if (suggestions.length === 0) {
-      const DOM_SELECTORS = [
-        'li[class*="suggest"]', 'li[class*="auto"]', 'li[class*="complete"]',
-        '.suggest_list li', '.autocomplete li', '[class*="suggest"] li',
-        '[class*="keyword"] li', 'ul[class*="word"] li',
-      ];
-      for (const sel of DOM_SELECTORS) {
-        const items = await page.$$(sel);
-        if (items.length > 0) {
-          suggestions = (await Promise.all(items.map(el => el.innerText().catch(() => ''))))
-            .map(s => s.trim()).filter(s => s.length > 0);
-          if (suggestions.length > 0) { console.log('[autocomplete] DOM selector matched:', sel); break; }
+        // d.ResultObject が候補リストの可能性が高い（.NET WebService形式）
+        const list = json.d?.ResultObject || json.d || json.ResultObject || json.list || json.data || json;
+        if (Array.isArray(list)) {
+          suggestions = list.map(i => {
+            if (typeof i === 'string') return i;
+            return i.keyword || i.KeyWord || i.text || i.word || i.Name || '';
+          }).filter(Boolean);
         }
+        console.log('[autocomplete] suggestions from API:', suggestions);
+      } catch (e) {
+        console.log('[autocomplete] parse error:', e.message);
       }
     }
 
-    // ③ liテキストから補完候補をフィルタリング（ナビゲーション項目を除外）
+    // ② APIで取れなかった場合：入力キーワードを含むliのみに絞る
     if (suggestions.length === 0) {
+      // キーワードの最初の2文字で部分一致フィルタ
+      const prefix = keyword.slice(0, 2);
       const allLiTexts = await page.$$eval('li', els =>
-        els.map(el => el.innerText.trim()).filter(t => t.length > 0)
+        els.map(el => el.innerText.trim()).filter(t => t.length >= 2 && t.length <= 50)
       );
-      console.log('[autocomplete] all li texts:', JSON.stringify(allLiTexts.slice(0, 40)));
-
-      suggestions = allLiTexts.filter(text => {
-        // 英語ナビ系を除外
-        if (/^Go to|^Skip/i.test(text)) return false;
-        // 二重コロン系ナビ（first:, my:, cart:, qpost:, new: 等）を除外
-        if (/^(first|my|cart|qpost|new|help):/i.test(text)) return false;
-        // 純英語テキストを除外
-        if (/^[A-Za-z\s]+$/.test(text)) return false;
-        // 1文字以下を除外
-        if (text.length < 2) return false;
-        return true;
-      });
+      suggestions = allLiTexts.filter(text => text.includes(prefix));
+      console.log('[autocomplete] DOM fallback with prefix "' + prefix + '":', suggestions);
     }
 
     res.json({ keyword, suggestions });
