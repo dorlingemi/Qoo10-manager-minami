@@ -156,16 +156,46 @@ app.post('/autocomplete', async (req, res) => {
       timeout: 30000,
     });
 
-    // ポップアップ・Cookie同意バナーを閉じる（クリックをブロックするため先に処理）
+    // 補完APIのレスポンスをネットワークレベルで傍受する
+    let suggestions = [];
+    let interceptedBody = null;
+
+    await page.route('**/*', async (route) => {
+      const url = route.request().url();
+      // Qoo10の補完関連リクエストを記録（URLパターンで絞り込む）
+      if (/suggest|autocomplete|complete|keyword/i.test(url) && !/\.(js|css|png|jpg|gif|woff)/i.test(url)) {
+        console.log('[autocomplete] intercepted:', url);
+      }
+      await route.continue();
+    });
+
+    // レスポンスを監視してJSONを拾う
+    page.on('response', async (response) => {
+      const url = response.url();
+      if (/suggest|autocomplete|complete/i.test(url) && !/\.(js|css|png|jpg|gif|woff)/i.test(url)) {
+        try {
+          const body = await response.text();
+          console.log('[autocomplete] response url:', url, 'body:', body.slice(0, 300));
+          if (!interceptedBody) interceptedBody = body;
+        } catch (e) {}
+      }
+    });
+
+    await page.goto('https://www.qoo10.jp/', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+
+    // ポップアップを閉じる
     for (const sel of DISMISS_SELECTORS) {
       try {
         const el = await page.$(sel);
         if (el) await el.click({ timeout: 2000 });
-      } catch (e) { /* 存在しない場合は無視 */ }
+      } catch (e) {}
     }
     await page.waitForTimeout(500);
 
-    // 検索ボックスを探して入力
+    // 検索ボックスを探す
     const INPUT_SELECTORS = [
       'input[name="keyword"]',
       'input[type="search"]',
@@ -184,46 +214,51 @@ app.post('/autocomplete', async (req, res) => {
       return res.status(500).json({ error: '検索ボックスが見つかりませんでした' });
     }
 
-    // click()の代わりにfocus()を使い、タイムアウトを回避
+    // キーワードを1文字ずつ入力（補完リクエストを発火させる）
     await page.focus(inputSel);
     await page.fill(inputSel, '');
-    await page.type(inputSel, keyword, { delay: 80 });
+    await page.type(inputSel, keyword, { delay: 120 });
 
-    // 補完ドロップダウンが出るまで最大3秒待機
-    const SUGGEST_SELECTORS = [
-      '.suggest_list li',
-      '.autocomplete li',
-      '[class*="suggest"] li',
-      '[class*="autocomplete"] li',
-      '[class*="dropdown"] li',
-      'ul[class*="suggest"] li',
-    ];
+    // 補完レスポンスが来るまで最大4秒待機
+    await page.waitForTimeout(4000);
 
-    let suggestions = [];
-    const deadline = Date.now() + 3000;
-
-    while (Date.now() < deadline) {
-      await page.waitForTimeout(300);
-      for (const sel of SUGGEST_SELECTORS) {
-        const items = await page.$$(sel);
-        if (items.length > 0) {
-          suggestions = await Promise.all(
-            items.map(el => el.innerText().catch(() => ''))
-          );
-          suggestions = suggestions.map(s => s.trim()).filter(s => s.length > 0);
-          if (suggestions.length > 0) break;
-        }
+    // ① ネットワーク傍受で取れた場合
+    if (interceptedBody) {
+      try {
+        const json = JSON.parse(interceptedBody);
+        // レスポンス形式を推測: 配列 or {list:[...]} or {data:[...]}
+        if (Array.isArray(json)) {
+          suggestions = json.map(i => (typeof i === 'string' ? i : i.keyword || i.text || i.word || '')).filter(Boolean);
+        } else if (json.list)  suggestions = json.list.map(i => typeof i === 'string' ? i : i.keyword || '').filter(Boolean);
+        else if (json.data)   suggestions = json.data.map(i => typeof i === 'string' ? i : i.keyword || '').filter(Boolean);
+      } catch (e) {
+        console.log('[autocomplete] JSON parse failed:', e.message);
       }
-      if (suggestions.length > 0) break;
     }
 
-    // フォールバック: ページ内のdataからも試みる
+    // ② DOMから拾う（フォールバック）
     if (suggestions.length === 0) {
-      suggestions = await page.evaluate(() => {
-        // Qoo10がJSオブジェクトに補完データを持っている場合
-        if (window.__AUTOCOMPLETE_DATA__) return window.__AUTOCOMPLETE_DATA__;
-        return [];
-      });
+      const DOM_SELECTORS = [
+        'li[class*="suggest"]', 'li[class*="auto"]', 'li[class*="complete"]',
+        '.suggest_list li', '.autocomplete li', '[class*="suggest"] li',
+        '[class*="keyword"] li', 'ul[class*="word"] li',
+      ];
+      for (const sel of DOM_SELECTORS) {
+        const items = await page.$$(sel);
+        if (items.length > 0) {
+          suggestions = (await Promise.all(items.map(el => el.innerText().catch(() => ''))))
+            .map(s => s.trim()).filter(s => s.length > 0);
+          if (suggestions.length > 0) { console.log('[autocomplete] DOM selector matched:', sel); break; }
+        }
+      }
+    }
+
+    // ③ デバッグ用：DOM全体のli要素のテキストをログに出力
+    if (suggestions.length === 0) {
+      const allLiTexts = await page.$$eval('li', els =>
+        els.map(el => el.className + ':' + el.innerText.slice(0, 40)).filter(t => t.length > 2).slice(0, 30)
+      );
+      console.log('[autocomplete] all li elements:', JSON.stringify(allLiTexts));
     }
 
     res.json({ keyword, suggestions });
