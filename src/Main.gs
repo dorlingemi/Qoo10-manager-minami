@@ -23,6 +23,8 @@ function onOpen() {
     .addSeparator()
     .addItem('📋 Inputシートを初期化',     'initInputSheet')
     .addItem('📝 ログをクリア',            'clearLog')
+    .addSeparator()
+    .addItem('🆙 説明を更新',             'refreshGuide')
     .addToUi();
 }
 
@@ -516,6 +518,13 @@ function openRankHistory() {
     return;
   }
   ss.setActiveSheet(sheet);
+}
+
+/**
+ * システム説明シートを最新内容で更新する
+ */
+function refreshGuide() {
+  Guide.refresh();
 }
 
 /**
