@@ -118,6 +118,116 @@ app.post('/render', async (req, res) => {
   }
 });
 
+/**
+ * POST /autocomplete
+ *   body: { keyword: string }
+ *   resp: { suggestions: string[] }
+ *
+ * Qoo10の検索ボックスにキーワードを入力し、
+ * 表示された補完候補を返す。
+ */
+app.post('/autocomplete', async (req, res) => {
+  if (API_KEY && req.headers['x-api-key'] !== API_KEY) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  const { keyword } = req.body || {};
+  if (!keyword) return res.status(400).json({ error: 'keyword is required' });
+
+  let context, page;
+  try {
+    const browser = await getBrowser();
+    context = await browser.newContext({
+      userAgent: UA,
+      viewport: { width: 1366, height: 900 },
+      locale: 'ja-JP',
+    });
+    page = await context.newPage();
+
+    // 画像/フォント/メディアをブロックして高速化
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      if (['image', 'font', 'media', 'stylesheet'].includes(type)) return route.abort();
+      return route.continue();
+    });
+
+    await page.goto('https://www.qoo10.jp/', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+
+    // 検索ボックスを探して入力
+    // Qoo10のサイト構造に合わせて複数のセレクタ候補を試す
+    const INPUT_SELECTORS = [
+      'input[name="keyword"]',
+      'input[type="search"]',
+      '#searchKeyword',
+      '.search_input input',
+      'input[placeholder*="検索"]',
+    ];
+
+    let inputEl = null;
+    for (const sel of INPUT_SELECTORS) {
+      inputEl = await page.$(sel);
+      if (inputEl) break;
+    }
+
+    if (!inputEl) {
+      return res.status(500).json({ error: '検索ボックスが見つかりませんでした' });
+    }
+
+    await inputEl.click();
+    await inputEl.fill('');
+    await inputEl.type(keyword, { delay: 80 });
+
+    // 補完ドロップダウンが出るまで最大3秒待機
+    const SUGGEST_SELECTORS = [
+      '.suggest_list li',
+      '.autocomplete li',
+      '[class*="suggest"] li',
+      '[class*="autocomplete"] li',
+      '[class*="dropdown"] li',
+      'ul[class*="suggest"] li',
+    ];
+
+    let suggestions = [];
+    const deadline = Date.now() + 3000;
+
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(300);
+      for (const sel of SUGGEST_SELECTORS) {
+        const items = await page.$$(sel);
+        if (items.length > 0) {
+          suggestions = await Promise.all(
+            items.map(el => el.innerText().catch(() => ''))
+          );
+          suggestions = suggestions.map(s => s.trim()).filter(s => s.length > 0);
+          if (suggestions.length > 0) break;
+        }
+      }
+      if (suggestions.length > 0) break;
+    }
+
+    // フォールバック: ページ内のdataからも試みる
+    if (suggestions.length === 0) {
+      suggestions = await page.evaluate(() => {
+        // Qoo10がJSオブジェクトに補完データを持っている場合
+        if (window.__AUTOCOMPLETE_DATA__) return window.__AUTOCOMPLETE_DATA__;
+        return [];
+      });
+    }
+
+    res.json({ keyword, suggestions });
+
+  } catch (e) {
+    console.error('Autocomplete error:', e.message);
+    res.status(500).json({ error: e.message });
+  } finally {
+    if (page)    await page.close().catch(() => {});
+    if (context) await context.close().catch(() => {});
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Qoo10 render service listening on port ${PORT}`);
 });

@@ -15,6 +15,7 @@ function onOpen() {
     .addSeparator()
     .addItem('🔤 キーワード分析',          'runKeywordAnalysisPrompt')
     .addItem('💰 購買価値チェック',        'runKeywordValuePrompt')
+    .addItem('🔮 補完キーワード取得',      'runKeywordSuggestPrompt')
     .addItem('📍 順位確認',               'runRankCheckPrompt')
     .addSeparator()
     .addItem('📊 ダッシュボード更新',       'runDashboardOnly')
@@ -96,6 +97,28 @@ function runRankCheckPrompt() {
 
   ui.alert('検索中...（最大5ページ分かかります）\nログシートで進捗を確認できます。');
   RankChecker.check(keyword, target);
+}
+
+/**
+ * メニューから補完キーワード取得を起動する
+ * 補完候補の一覧表示のみ（購買価値分析なし）か、
+ * 各候補の購買価値も評価するかをユーザーに選択させる。
+ */
+function runKeywordSuggestPrompt() {
+  var ui = SpreadsheetApp.getUi();
+  var r1 = ui.prompt('補完キーワード取得', '検索キーワードを入力してください（例: まつげ）：', ui.ButtonSet.OK_CANCEL);
+  if (r1.getSelectedButton() !== ui.Button.OK) return;
+  var keyword = r1.getResponseText().trim();
+  if (!keyword) return;
+
+  var r2 = ui.alert(
+    '購買価値も評価しますか？',
+    '「はい」: 各補完候補をKeywordValueで評価（時間がかかります）\n「いいえ」: 候補一覧のみ表示',
+    ui.ButtonSet.YES_NO
+  );
+  var analyzeAll = (r2 === ui.Button.YES);
+
+  KeywordSuggest.run(keyword, analyzeAll);
 }
 
 /**
