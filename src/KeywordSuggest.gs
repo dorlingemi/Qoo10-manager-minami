@@ -146,6 +146,8 @@ var KeywordSuggest = (function () {
    * @param {string} baseKeyword  例: "まつげ"
    * @param {boolean} [analyzeAll=false]  trueにすると全候補をKeywordValue.check()で分析
    */
+  var MAX_ANALYZE = 5;  // 購買価値分析の上限件数（タイムアウト対策）
+
   function run(baseKeyword, analyzeAll) {
     AppLogger.info('KeywordSuggest: 開始', baseKeyword);
 
@@ -162,12 +164,15 @@ var KeywordSuggest = (function () {
     }
 
     // 各補完候補をKeywordValue._analyzeと同様に評価（分析する場合）
+    // 分析対象は最大MAX_ANALYZE件に制限（タイムアウト対策）
+    var analyzeTargets = analyzeAll ? suggestions.slice(0, MAX_ANALYZE) : [];
+
     var results = suggestions.map(function (kw, idx) {
-      if (!analyzeAll) {
+      if (analyzeTargets.indexOf(kw) < 0) {
         return { keyword: kw, analyzed: null };
       }
 
-      AppLogger.info('KeywordSuggest: 分析中 ' + (idx + 1) + '/' + suggestions.length, kw);
+      AppLogger.info('KeywordSuggest: 分析中 ' + (analyzeTargets.indexOf(kw) + 1) + '/' + analyzeTargets.length, kw);
       try {
         var html  = Crawler.fetchSearch(kw, 1);
         if (!html) return { keyword: kw, analyzed: null };

@@ -113,7 +113,7 @@ function runKeywordSuggestPrompt() {
 
   var r2 = ui.alert(
     '購買価値も評価しますか？',
-    '「はい」: 各補完候補をKeywordValueで評価（時間がかかります）\n「いいえ」: 候補一覧のみ表示',
+    '「はい」: 上位5件の候補をKeywordValueで評価（約8分）\n「いいえ」: 候補一覧のみ表示（約1分）',
     ui.ButtonSet.YES_NO
   );
   var analyzeAll = (r2 === ui.Button.YES);
