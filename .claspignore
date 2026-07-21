@@ -1,0 +1,2 @@
+# Config.gsはRender URL/API KeyなどをGASエディタで直接設定するため除外
+src/Config.gs
