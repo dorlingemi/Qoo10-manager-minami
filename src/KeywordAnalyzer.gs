@@ -121,6 +121,18 @@ var KeywordAnalyzer = (function () {
         organicScore* 0.10
       );
 
+      // キーワード分類
+      var category;
+      if (freqScore >= 60) {
+        category = '🔴 大词';
+      } else if (freqScore >= 20 && topScore >= 40) {
+        category = '🟠 品类词';
+      } else if (freqScore < 15 && effectScore >= 40) {
+        category = '🟢 长尾词';
+      } else {
+        category = '🔵 属性词';
+      }
+
       return {
         token:        token,
         docs:         s.docs,
@@ -131,6 +143,7 @@ var KeywordAnalyzer = (function () {
         reviewScore:  reviewScore,     // レビュー相関スコア
         organicPct:   organicScore,    // オーガニック率(%)
         effectScore:  effectScore,     // 総合有効性スコア
+        category:     category,        // キーワード分類
       };
     });
 
@@ -154,7 +167,7 @@ var KeywordAnalyzer = (function () {
     sheet.clearFormats();
 
     var headers = [
-      'キーワード', 'トークン', '出現件数', '出現率(%)',
+      'キーワード', '分類', 'トークン', '出現件数', '出現率(%)',
       '上位5件中', '上位集中度(%)', '平均レビュー数',
       'レビュー相関', 'オーガニック率(%)', '総合有効性スコア',
     ];
@@ -162,7 +175,7 @@ var KeywordAnalyzer = (function () {
     var rows = [headers];
     stats.forEach(function (s) {
       rows.push([
-        keyword, s.token, s.docs, s.freqPct,
+        keyword, s.category, s.token, s.docs, s.freqPct,
         s.topDocs, s.topScore, s.avgReview,
         s.reviewScore, s.organicPct, s.effectScore,
       ]);
@@ -175,10 +188,22 @@ var KeywordAnalyzer = (function () {
       .setFontColor('#FFFFFF');
     sheet.setFrozenRows(1);
 
-    // 有効性スコアに応じて背景色を塗る（高≥70=緑, 中40-69=黄, 低<40=白）
+    // 分類列（B列）に背景色を付ける
     var dataRows = sheet.getLastRow() - 1;
     if (dataRows > 0) {
-      var scoreRange = sheet.getRange(2, 10, dataRows, 1);
+      var categoryRange = sheet.getRange(2, 2, dataRows, 1);
+      var categories = categoryRange.getValues();
+      var catColors = categories.map(function (row) {
+        var c = row[0];
+        if (c.indexOf('大词') >= 0)  return ['#FFCDD2'];  // 赤系
+        if (c.indexOf('品类词') >= 0) return ['#FFE0B2'];  // オレンジ系
+        if (c.indexOf('长尾词') >= 0) return ['#C8E6C9'];  // 緑系
+        return ['#BBDEFB'];                                 // 青系（属性词）
+      });
+      categoryRange.setBackgrounds(catColors);
+
+      // 総合有効性スコア列（K列=11列目）に背景色を付ける
+      var scoreRange = sheet.getRange(2, 11, dataRows, 1);
       var scores = scoreRange.getValues();
       var colors = scores.map(function (row) {
         var s = row[0];
